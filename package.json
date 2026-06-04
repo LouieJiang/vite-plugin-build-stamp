@@ -1,0 +1,57 @@
+{
+  "name": "vite-plugin-build-stamp",
+  "version": "1.0.0",
+  "description": "Vite plugin that stamps build information (time, version, git commit, mode) into index.html as <meta> tags",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.en.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "vite",
+    "vite-plugin",
+    "build",
+    "meta",
+    "stamp",
+    "version",
+    "git",
+    "html"
+  ],
+  "author": "LouieJiang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LouieJiang/vite-plugin-build-stamp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LouieJiang/vite-plugin-build-stamp/issues"
+  },
+  "homepage": "https://github.com/LouieJiang/vite-plugin-build-stamp#readme",
+  "peerDependencies": {
+    "vite": ">=3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
