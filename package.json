@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-build-stamp",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Vite plugin that stamps build information (time, version, git commit, mode) into index.html as <meta> tags",
   "type": "module",
   "main": "./dist/index.cjs",
