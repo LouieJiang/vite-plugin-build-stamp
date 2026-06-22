@@ -14,6 +14,8 @@ export interface EncryptOptions {
   key: string
   /** Name exposed on `window` for console decryption. Default: `'__buildInfo'`. */
   helperName?: string
+  /** Print a hint in the console showing how to decrypt. Default: `false`. */
+  consoleHint?: boolean
 }
 
 export interface BuildStampOptions {
@@ -191,10 +193,12 @@ export function buildStamp(options: BuildStampOptions = {}): Plugin {
           const ciphertext = await encryptPayload(JSON.stringify(info), encryptKey)
           const i18n = resolveConsoleI18n(locale)
 
+          const consoleHint = encrypt!.consoleHint ?? false
+
           injection = [
             '    <!-- build stamp (vite-plugin-build-stamp) [encrypted] -->',
             `    ${buildMetaTag(encryptedMetaName, ciphertext)}`,
-            `    ${buildDecryptScript(encryptedMetaName, helperName, i18n)}`,
+            `    ${buildDecryptScript(encryptedMetaName, helperName, i18n, consoleHint)}`,
             '    <!-- /build stamp -->',
           ].join('\n')
         } else {

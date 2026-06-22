@@ -22,9 +22,20 @@ export function buildDecryptScript(
   metaName: string,
   helperName: string,
   i18n: ConsoleI18n,
+  consoleHint = false,
 ): string {
   const i18nJson = JSON.stringify(i18n)
   const styleJson = JSON.stringify(STYLE)
+
+  const hintBlock = consoleHint
+    ? `
+  console.log(
+    '%c' + _i18n.hintBefore + '%c' + ${JSON.stringify(helperName)} + '%c' + _i18n.hintAfter,
+    _style.hintAccent,
+    _style.hintCall,
+    'color:inherit'
+  );`
+    : ''
 
   return `<script>
 (function() {
@@ -128,14 +139,7 @@ export function buildDecryptScript(
     } catch (e) {
       console.error(_i18n.decryptFailed, e);
     }
-  };
-
-  console.log(
-    '%c' + _i18n.hintBefore + '%c' + ${JSON.stringify(helperName)} + '%c' + _i18n.hintAfter,
-    _style.hintAccent,
-    _style.hintCall,
-    'color:inherit'
-  );
+  };${hintBlock}
 })();
 </script>`
 }

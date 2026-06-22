@@ -221,6 +221,19 @@ describe('encrypt mode', () => {
     expect(result).not.toContain('前端构建信息')
   })
 
+  it('does not print console hint by default', async () => {
+    const result = await runPlugin(baseHtml, { encrypt: { key: 'secret123' } })
+    // _i18n.hintBefore/hintAfter are accessed as code only in the hint block
+    expect(result).not.toContain('_i18n.hintBefore')
+    expect(result).not.toContain('_i18n.hintAfter')
+  })
+
+  it('prints console hint when consoleHint is true', async () => {
+    const result = await runPlugin(baseHtml, { encrypt: { key: 'secret123', consoleHint: true } })
+    expect(result).toContain('_i18n.hintBefore')
+    expect(result).toContain('_i18n.hintAfter')
+  })
+
   it('decrypts ciphertext with the same key (roundtrip)', async () => {
     const result = await runPlugin(baseHtml, { encrypt: { key: 'roundtrip-key' } })
     const match = result.match(/name="build:encrypted" content="([^"]+)"/)
