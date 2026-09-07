@@ -10,6 +10,7 @@ export interface ConsoleI18n {
   commitId: string
   environment: string
   metaNotFound: string
+  secureContextRequired: string
   decryptFailed: string
   hintBefore: string
   hintCall: string
@@ -27,6 +28,8 @@ const MESSAGES: Record<BuildStampLocale, ConsoleI18n> = {
     commitId: '提交ID',
     environment: '运行环境',
     metaNotFound: '[build-stamp] 未找到加密 meta 标签',
+    secureContextRequired:
+      '[build-stamp] 当前页面无法使用 Web Crypto（需 HTTPS 或 localhost）。可开启 encrypt.jsFallback，或改用 HTTPS 后再试。',
     decryptFailed: '[build-stamp] 解密失败，密钥是否正确？',
     hintBefore: '[build-stamp] 在控制台执行 ',
     hintCall: '', // filled at runtime with helperName
@@ -42,6 +45,8 @@ const MESSAGES: Record<BuildStampLocale, ConsoleI18n> = {
     commitId: 'Commit ID',
     environment: 'Environment',
     metaNotFound: '[build-stamp] encrypted meta tag not found',
+    secureContextRequired:
+      '[build-stamp] Web Crypto unavailable (HTTPS or localhost required). Enable encrypt.jsFallback, or use HTTPS and retry.',
     decryptFailed: '[build-stamp] decryption failed — wrong key?',
     hintBefore: '[build-stamp] call ',
     hintCall: '', // filled at runtime with helperName

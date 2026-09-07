@@ -4,6 +4,9 @@ const META_KEY_RE = /^[a-zA-Z][a-zA-Z0-9_-]*$/
 /** Valid `window` property name for the decrypt helper */
 const HELPER_NAME_RE = /^[$A-Z_a-z][$\w]*$/
 
+/** External decrypt helper path: `build-stamp.js`, `assets/stamp.js` */
+const SCRIPT_FILE_RE = /^(?!.*\.\.)[a-zA-Z0-9._/-]+\.js$/
+
 const PLUGIN = '[vite-plugin-build-stamp]'
 
 export function assertValidPrefix(prefix: string): void {
@@ -18,6 +21,14 @@ export function assertValidHelperName(name: string): void {
   if (!HELPER_NAME_RE.test(name)) {
     throw new Error(
       `${PLUGIN} Invalid encrypt.helperName "${name}". Must be a valid JavaScript identifier.`,
+    )
+  }
+}
+
+export function assertValidScriptFile(fileName: string): void {
+  if (!SCRIPT_FILE_RE.test(fileName)) {
+    throw new Error(
+      `${PLUGIN} Invalid encrypt.scriptFile "${fileName}". Use a relative .js path without ".." (e.g. "build-stamp.js").`,
     )
   }
 }
@@ -48,7 +59,12 @@ export function resolveEncryptKey(
 export function validateOptions(options: {
   prefix?: string
   custom?: Record<string, string>
-  encrypt?: { key?: string; helperName?: string }
+  encrypt?: {
+    key?: string
+    helperName?: string
+    script?: 'inline' | 'file'
+    scriptFile?: string
+  }
 }): void {
   const {
     prefix = 'build',
@@ -63,6 +79,9 @@ export function validateOptions(options: {
     resolveEncryptKey(encrypt)
     if (encrypt.helperName !== undefined) {
       assertValidHelperName(encrypt.helperName)
+    }
+    if (encrypt.scriptFile !== undefined) {
+      assertValidScriptFile(encrypt.scriptFile)
     }
   }
 }

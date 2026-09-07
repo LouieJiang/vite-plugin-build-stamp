@@ -87,6 +87,7 @@ export default defineConfig({
       encrypt: {
         key: process.env.BUILD_META_KEY ?? 'your-secret',
         helperName: '__buildInfo', // 控制台调用名，默认 '__buildInfo'
+        script: 'file', // 解密函数输出为 build-stamp.js，而不是塞进 index.html
       },
     }),
   ],
@@ -122,6 +123,10 @@ export default defineConfig({
 |------|------|--------|------|
 | `key` | `string` | **必填** | 加密密钥（任意字符串），通过 PBKDF2 派生为 AES-256-GCM 密钥 |
 | `helperName` | `string` | `"__buildInfo"` | 解密函数挂载到 `window` 上的名称 |
+| `consoleHint` | `boolean` | `false` | 是否在控制台打印解密提示 |
+| `jsFallback` | `boolean` | `false` | 是否内联纯 JS 解密（约 17KB）。HTTP 等没有 `crypto.subtle` 时需要开启 |
+| `script` | `'inline' \| 'file'` | `"inline"` | 解密函数放哪里：内联进 `index.html`，或输出独立 JS |
+| `scriptFile` | `string` | `"build-stamp.js"` | `script: 'file'` 时的文件名（相对产物目录） |
 
 ---
 
@@ -140,7 +145,7 @@ AES-256-GCM key
          → 存入 <meta content="...">
 ```
 
-浏览器端使用 **Web Crypto API** 解密，无需引入任何第三方库。  
+浏览器端优先使用 **Web Crypto API** 解密。默认不内联纯 JS 实现，以控制脚本体积。若页面跑在 HTTP 等非安全上下文（没有 `crypto.subtle`），设置 `encrypt.jsFallback: true` 才会打进 `@noble/ciphers` 兜底。  
 使用错误密钥解密时，AES-GCM 的认证标签校验会直接报错，不会返回乱码数据。
 
 ---

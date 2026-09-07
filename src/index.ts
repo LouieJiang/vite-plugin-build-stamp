@@ -2,7 +2,7 @@ import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import type { Plugin, ResolvedConfig } from 'vite'
-import { buildDecryptScript } from './decrypt-script'
+import { buildDecryptIife } from './decrypt-script'
 import { resolveConsoleI18n, type BuildStampLocale } from './i18n'
 import { CRYPTO_SALT_PREFIX } from './constants'
 import { resolveEncryptKey, validateOptions } from './validate'
@@ -16,6 +16,19 @@ export interface EncryptOptions {
   helperName?: string
   /** Print a hint in the console showing how to decrypt. Default: `false`. */
   consoleHint?: boolean
+  /**
+   * Embed a ~17KB pure-JS AES-GCM implementation for HTTP / non-secure contexts
+   * where `crypto.subtle` is unavailable. Default: `false`.
+   */
+  jsFallback?: boolean
+  /**
+   * Where to put the decrypt helper.
+   * `'inline'` (default) embeds it in `index.html`;
+   * `'file'` emits a separate JS asset and only injects `<script src>`.
+   */
+  script?: 'inline' | 'file'
+  /** Output path when `script: 'file'`. Default: `'build-stamp.js'`. */
+  scriptFile?: string
 }
 
 export interface BuildStampOptions {
@@ -96,6 +109,12 @@ function buildMetaTag(name: string, content: string): string {
   return `<meta name="${escapeAttr(name)}" content="${escapeAttr(content)}">`
 }
 
+function toPublicUrl(base: string | undefined, fileName: string): string {
+  const raw = base && base.length > 0 ? base : '/'
+  const normalizedBase = raw.endsWith('/') ? raw : `${raw}/`
+  return `${normalizedBase}${fileName.replace(/^\//, '')}`
+}
+
 // ─── Encryption (Node.js crypto, build time) ──────────────────────────────────
 
 async function encryptPayload(plaintext: string, password: string): Promise<string> {
@@ -157,8 +176,11 @@ export function buildStamp(options: BuildStampOptions = {}): Plugin {
   } = options
 
   const encryptKey = resolveEncryptKey(encrypt)
+  const scriptMode = encrypt?.script ?? 'inline'
+  const scriptFile = encrypt?.scriptFile ?? 'build-stamp.js'
 
   let resolvedConfig: ResolvedConfig
+  let externalScriptSource: string | undefined
 
   return {
     name: 'vite-plugin-build-stamp',
@@ -194,13 +216,33 @@ export function buildStamp(options: BuildStampOptions = {}): Plugin {
           const i18n = resolveConsoleI18n(locale)
 
           const consoleHint = encrypt!.consoleHint ?? false
+          const jsFallback = encrypt!.jsFallback ?? false
+          const iife = buildDecryptIife(
+            encryptedMetaName,
+            helperName,
+            i18n,
+            consoleHint,
+            jsFallback,
+          )
 
-          injection = [
-            '    <!-- build stamp (vite-plugin-build-stamp) [encrypted] -->',
-            `    ${buildMetaTag(encryptedMetaName, ciphertext)}`,
-            `    ${buildDecryptScript(encryptedMetaName, helperName, i18n, consoleHint)}`,
-            '    <!-- /build stamp -->',
-          ].join('\n')
+          if (scriptMode === 'file') {
+            externalScriptSource = iife
+            const src = escapeAttr(toPublicUrl(resolvedConfig.base, scriptFile))
+            injection = [
+              '    <!-- build stamp (vite-plugin-build-stamp) [encrypted] -->',
+              `    ${buildMetaTag(encryptedMetaName, ciphertext)}`,
+              `    <script src="${src}"></script>`,
+              '    <!-- /build stamp -->',
+            ].join('\n')
+          } else {
+            externalScriptSource = undefined
+            injection = [
+              '    <!-- build stamp (vite-plugin-build-stamp) [encrypted] -->',
+              `    ${buildMetaTag(encryptedMetaName, ciphertext)}`,
+              `    <script>\n${iife}\n</script>`,
+              '    <!-- /build stamp -->',
+            ].join('\n')
+          }
         } else {
           const tags = Object.entries(info).map(([name, value]) => buildMetaTag(name, value))
 
@@ -213,6 +255,28 @@ export function buildStamp(options: BuildStampOptions = {}): Plugin {
 
         return html.replace(/<\/head>/i, `${injection}\n  </head>`)
       },
+    },
+
+    generateBundle() {
+      if (!externalScriptSource) return
+      this.emitFile({
+        type: 'asset',
+        fileName: scriptFile,
+        source: externalScriptSource,
+      })
+    },
+
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!externalScriptSource || !req.url) return next()
+        const expected = toPublicUrl(server.config.base, scriptFile)
+        const path = req.url.split('?')[0]
+        if (path !== expected && path !== `/${scriptFile}` && !path.endsWith(`/${scriptFile}`)) {
+          return next()
+        }
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+        res.end(externalScriptSource)
+      })
     },
   }
 }

@@ -1,4 +1,5 @@
 import type { ConsoleI18n } from './i18n'
+import { BROWSER_FALLBACK_IIFE } from './browser-fallback-bundle'
 
 const STYLE = {
   border: 'color: #1890ff; font-weight: bold;',
@@ -15,14 +16,15 @@ const STYLE = {
 } as const
 
 /**
- * Builds the inline `<script>` injected in encrypted mode.
- * Uses Web Crypto API in the browser; strings come from {@link ConsoleI18n}.
+ * Builds the decrypt helper IIFE (no `<script>` wrapper).
+ * Uses Web Crypto API; optionally embeds a noble-ciphers fallback when `jsFallback` is true.
  */
-export function buildDecryptScript(
+export function buildDecryptIife(
   metaName: string,
   helperName: string,
   i18n: ConsoleI18n,
   consoleHint = false,
+  jsFallback = false,
 ): string {
   const i18nJson = JSON.stringify(i18n)
   const styleJson = JSON.stringify(STYLE)
@@ -37,23 +39,51 @@ export function buildDecryptScript(
   );`
     : ''
 
-  return `<script>
-(function() {
+  const fallbackBlock = jsFallback
+    ? `
+  ${BROWSER_FALLBACK_IIFE}
+  var _decryptFallback = _bsCrypto.decryptInBrowser;`
+    : `
+  var _decryptFallback = null;`
+
+  return `(function() {
   var _i18n = ${i18nJson};
   var _style = ${styleJson};
+  ${fallbackBlock}
+
+  function _getSubtle() {
+    var c = globalThis.crypto;
+    if (c && c.subtle) return c.subtle;
+    try {
+      var frame = document.createElement('iframe');
+      frame.style.display = 'none';
+      (document.body || document.documentElement).appendChild(frame);
+      var win = frame.contentWindow;
+      var subtle = win && win.crypto && win.crypto.subtle;
+      frame.parentNode.removeChild(frame);
+      if (subtle) return subtle;
+    } catch (e) {}
+    return null;
+  }
 
   async function _decrypt(cipherB64, password) {
+    var subtle = _getSubtle();
+    if (!subtle) {
+      if (_decryptFallback) return _decryptFallback(cipherB64, password);
+      throw new Error(_i18n.secureContextRequired);
+    }
+
     var buf = Uint8Array.from(atob(cipherB64), function(c) { return c.charCodeAt(0); });
     var iv = buf.slice(0, 12);
     var authTag = buf.slice(12, 28);
     var ctxt = buf.slice(28);
     var enc = new TextEncoder();
     var saltStr = 'vite-plugin-build-stamp:' + password;
-    var saltBuf = await crypto.subtle.digest('SHA-256', enc.encode(saltStr));
-    var baseKey = await crypto.subtle.importKey(
+    var saltBuf = await subtle.digest('SHA-256', enc.encode(saltStr));
+    var baseKey = await subtle.importKey(
       'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
     );
-    var aesKey = await crypto.subtle.deriveKey(
+    var aesKey = await subtle.deriveKey(
       { name: 'PBKDF2', salt: saltBuf, iterations: 100000, hash: 'SHA-256' },
       baseKey,
       { name: 'AES-GCM', length: 256 },
@@ -63,7 +93,7 @@ export function buildDecryptScript(
     var combined = new Uint8Array(ctxt.length + 16);
     combined.set(ctxt);
     combined.set(authTag, ctxt.length);
-    var plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, aesKey, combined);
+    var plain = await subtle.decrypt({ name: 'AES-GCM', iv: iv }, aesKey, combined);
     return JSON.parse(new TextDecoder().decode(plain));
   }
 
@@ -140,6 +170,18 @@ export function buildDecryptScript(
       console.error(_i18n.decryptFailed, e);
     }
   };${hintBlock}
-})();
+})();`
+}
+
+/** Wraps {@link buildDecryptIife} in an inline `<script>` tag. */
+export function buildDecryptScript(
+  metaName: string,
+  helperName: string,
+  i18n: ConsoleI18n,
+  consoleHint = false,
+  jsFallback = false,
+): string {
+  return `<script>
+${buildDecryptIife(metaName, helperName, i18n, consoleHint, jsFallback)}
 </script>`
 }

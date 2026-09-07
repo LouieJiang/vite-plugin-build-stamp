@@ -122,6 +122,10 @@ export default defineConfig({
 |--------|------|---------|-------------|
 | `key` | `string` | **required** | Encryption password; derived to AES-256-GCM key via PBKDF2 |
 | `helperName` | `string` | `"__buildInfo"` | Name exposed on `window` for console decryption |
+| `consoleHint` | `boolean` | `false` | Print a decrypt hint in the console |
+| `jsFallback` | `boolean` | `false` | Inline a ~17KB pure-JS decrypt for HTTP / non-secure contexts without `crypto.subtle` |
+| `script` | `'inline' \| 'file'` | `"inline"` | Put the decrypt helper inline in `index.html`, or emit a separate JS file |
+| `scriptFile` | `string` | `"build-stamp.js"` | File name when `script: 'file'` (relative to the output dir) |
 
 ---
 
@@ -140,7 +144,7 @@ AES-256-GCM key
          → stored in <meta content="...">
 ```
 
-Decryption runs in the browser via the **Web Crypto API** — no extra dependencies.  
+Decryption prefers the **Web Crypto API**. The pure-JS implementation is **off by default** to keep the inline script small. Set `encrypt.jsFallback: true` to embed `@noble/ciphers` for HTTP / non-secure contexts without `crypto.subtle`.  
 A wrong key fails AES-GCM authentication instead of returning garbage data.
 
 ---

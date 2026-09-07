@@ -140,6 +140,12 @@ describe('validation', () => {
     ).toThrow(/Invalid encrypt\.helperName/)
   })
 
+  it('throws on invalid scriptFile', () => {
+    expect(() =>
+      buildStamp({ encrypt: { key: 'k', scriptFile: '../stamp.js' } }),
+    ).toThrow(/Invalid encrypt\.scriptFile/)
+  })
+
   it('throws on invalid custom keys', () => {
     expect(() => buildStamp({ custom: { 'bad key': 'v' } })).toThrow(/Invalid custom key/)
   })
@@ -157,6 +163,18 @@ describe('encrypt mode', () => {
     const result = await runPlugin(baseHtml, { encrypt: { key: 'secret123' } })
     expect(result).toContain('<script>')
     expect(result).toContain('__buildInfo')
+  })
+
+  it('does not inject pure-JS decrypt fallback by default', async () => {
+    const result = await runPlugin(baseHtml, { encrypt: { key: 'secret123' } })
+    expect(result).not.toContain('_bsCrypto')
+    expect(result).toContain('_decryptFallback = null')
+  })
+
+  it('injects pure-JS decrypt fallback when jsFallback is true', async () => {
+    const result = await runPlugin(baseHtml, { encrypt: { key: 'secret123', jsFallback: true } })
+    expect(result).toContain('_bsCrypto')
+    expect(result).toContain('_decryptFallback')
   })
 
   it('quotes encrypted meta selector in decrypt helper', async () => {
@@ -251,5 +269,39 @@ describe('encrypt mode', () => {
     const result = await runPlugin(baseHtml, { encrypt: { key: 'correct' } })
     const b64 = result.match(/name="build:encrypted" content="([^"]+)"/)![1]
     expect(() => decryptPayload(b64, 'wrong')).toThrow()
+  })
+
+  it('emits decrypt helper as a separate file when script is file', async () => {
+    const plugin = buildStamp({ encrypt: { key: 'secret123', script: 'file' } })
+    ;(plugin.configResolved as Function)(makeConfig({ base: '/iip-web/' }))
+    const handler = (plugin.transformIndexHtml as any).handler
+    const html = await handler(baseHtml, {})
+
+    expect(html).toContain('name="build:encrypted"')
+    expect(html).toContain('src="/iip-web/build-stamp.js"')
+    expect(html).not.toContain('async function _decrypt')
+    expect(html).not.toContain('window["__buildInfo"]')
+
+    const emitFile = vi.fn()
+    ;(plugin.generateBundle as Function).call({ emitFile })
+    expect(emitFile).toHaveBeenCalledTimes(1)
+    const asset = emitFile.mock.calls[0][0]
+    expect(asset.type).toBe('asset')
+    expect(asset.fileName).toBe('build-stamp.js')
+    expect(asset.source).toContain('window["__buildInfo"]')
+    expect(asset.source).toContain('async function _decrypt')
+  })
+
+  it('respects custom scriptFile name', async () => {
+    const plugin = buildStamp({
+      encrypt: { key: 'secret123', script: 'file', scriptFile: 'assets/stamp.js' },
+    })
+    ;(plugin.configResolved as Function)(makeConfig({ base: '/' }))
+    const html = await (plugin.transformIndexHtml as any).handler(baseHtml, {})
+    expect(html).toContain('src="/assets/stamp.js"')
+
+    const emitFile = vi.fn()
+    ;(plugin.generateBundle as Function).call({ emitFile })
+    expect(emitFile.mock.calls[0][0].fileName).toBe('assets/stamp.js')
   })
 })
