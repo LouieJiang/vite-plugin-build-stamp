@@ -45,6 +45,11 @@ export interface BuildStampOptions {
   mode?: boolean
   /** Inject current git branch. Default: `true`. */
   gitBranch?: boolean
+  /**
+   * Inject git tag when HEAD is detached at an exact tag (e.g. `git checkout v1.2.3`).
+   * Omitted on branch checkouts. Default: `true`.
+   */
+  gitTag?: boolean
   /** Extra key-value pairs, e.g. `{ region: 'cn' }`. */
   custom?: Record<string, string>
   /** Meta name prefix. Default: `'build'` → `build:time`, etc. */
@@ -84,6 +89,47 @@ function getGitBranch(): string {
   } catch {
     return 'unknown'
   }
+}
+
+function isDetachedHead(): boolean {
+  try {
+    execSync('git symbolic-ref --quiet HEAD', { stdio: ['pipe', 'pipe', 'pipe'] })
+    return false
+  } catch {
+    return true
+  }
+}
+
+function getExactGitTag(): string | undefined {
+  try {
+    const tag = execSync('git describe --tags --exact-match HEAD', {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+      .toString()
+      .trim()
+    return tag || undefined
+  } catch {
+    return undefined
+  }
+}
+
+function getCiTag(): string | undefined {
+  if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) {
+    return process.env.GITHUB_REF_NAME
+  }
+  if (process.env.CI_COMMIT_TAG) {
+    return process.env.CI_COMMIT_TAG
+  }
+  return undefined
+}
+
+/**
+ * Resolve tag only for detached HEAD at an exact tag (or CI tag build fallback).
+ * Returns undefined on branch checkouts so `build:tag` is omitted.
+ */
+function getGitTag(): string | undefined {
+  if (!isDetachedHead()) return undefined
+  return getExactGitTag() ?? getCiTag()
 }
 
 function getPackageVersion(root: string): string {
@@ -134,10 +180,13 @@ async function encryptPayload(plaintext: string, password: string): Promise<stri
 function collectBuildInfo(
   resolvedConfig: ResolvedConfig,
   options: Required<
-    Pick<BuildStampOptions, 'buildTime' | 'version' | 'gitCommit' | 'gitBranch' | 'mode' | 'custom' | 'prefix'>
+    Pick<
+      BuildStampOptions,
+      'buildTime' | 'version' | 'gitCommit' | 'gitBranch' | 'gitTag' | 'mode' | 'custom' | 'prefix'
+    >
   >,
 ): Record<string, string> {
-  const { buildTime, version, gitCommit, gitBranch, mode, custom, prefix } = options
+  const { buildTime, version, gitCommit, gitBranch, gitTag, mode, custom, prefix } = options
   const p = (key: string) => `${prefix}:${key}`
   const info: Record<string, string> = {}
 
@@ -148,6 +197,10 @@ function collectBuildInfo(
     info[p('commit')] = getGitCommit(short)
   }
   if (gitBranch) info[p('branch')] = getGitBranch()
+  if (gitTag) {
+    const tag = getGitTag()
+    if (tag) info[p('tag')] = tag
+  }
   if (mode) info[p('mode')] = resolvedConfig.mode
 
   for (const [key, value] of Object.entries(custom)) {
@@ -167,6 +220,7 @@ export function buildStamp(options: BuildStampOptions = {}): Plugin {
     version = true,
     gitCommit = true,
     gitBranch = true,
+    gitTag = true,
     mode = true,
     custom = {},
     prefix = 'build',
@@ -202,6 +256,7 @@ export function buildStamp(options: BuildStampOptions = {}): Plugin {
           version,
           gitCommit,
           gitBranch,
+          gitTag,
           mode,
           custom,
           prefix,

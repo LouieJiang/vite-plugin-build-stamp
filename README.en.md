@@ -17,6 +17,8 @@ Supports **plain mode** (human-readable tags) and **encrypted mode** (AES-256-GC
 <meta name="build:commit"  content="abc1234">
 <meta name="build:branch"  content="main">
 <meta name="build:mode"    content="production">
+<!-- Present only when checked out at an exact tag (detached HEAD): -->
+<!-- <meta name="build:tag" content="v1.2.3"> -->
 <!-- /build stamp -->
 ```
 
@@ -42,6 +44,7 @@ Example output (`locale: 'en'`):
   📦 Version: 1.2.3
   🕒 Build Time: 06/04/2024, 08:30:00 AM
   🌿 Git Branch: main
+  🏷️ Git Tag: v1.2.3   ← only when checked out at a tag
   🔗 Commit ID: abc1234
   🌍 Environment: PRODUCTION
 └───────────── Frontend Build Info ─────────────┘
@@ -109,6 +112,7 @@ export default defineConfig({
 | `version` | `boolean` | `true` | Inject `version` from `package.json` |
 | `gitCommit` | `boolean \| { short?: boolean }` | `true` | Inject git commit hash (short by default) |
 | `gitBranch` | `boolean` | `true` | Inject current git branch |
+| `gitTag` | `boolean` | `true` | Inject `build:tag` only when detached at an exact tag (or CI tag build); omitted on branch checkouts |
 | `mode` | `boolean` | `true` | Inject Vite build mode |
 | `custom` | `Record<string, string>` | `{}` | Extra key-value fields |
 | `prefix` | `string` | `"build"` | Meta name prefix → `{prefix}:{key}` |
@@ -160,6 +164,7 @@ function getBuildInfo() {
     version: get('build:version'),
     commit:  get('build:commit'),
     branch:  get('build:branch'),
+    tag:     get('build:tag'), // only present for tag checkouts
     mode:    get('build:mode'),
   }
 }

@@ -1,11 +1,32 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { buildStamp } from '../src/index'
 import { decryptPayload } from './crypto'
 import type { ResolvedConfig } from 'vite'
 
+type GitMockState = {
+  detached: boolean
+  exactTag?: string
+  branch?: string
+}
+
+const gitState: GitMockState = {
+  detached: false,
+  branch: 'feature/my-branch',
+}
+
 vi.mock('child_process', () => ({
   execSync: vi.fn((cmd: string) => {
-    if (cmd.includes('abbrev-ref')) return Buffer.from('feature/my-branch\n')
+    if (cmd.includes('symbolic-ref')) {
+      if (gitState.detached) throw new Error('detached')
+      return Buffer.from('refs/heads/feature/my-branch\n')
+    }
+    if (cmd.includes('describe') && cmd.includes('exact-match')) {
+      if (gitState.exactTag) return Buffer.from(`${gitState.exactTag}\n`)
+      throw new Error('no tag')
+    }
+    if (cmd.includes('abbrev-ref')) {
+      return Buffer.from(`${gitState.branch ?? 'feature/my-branch'}\n`)
+    }
     if (cmd.includes('--short')) return Buffer.from('abc1234\n')
     return Buffer.from('abc1234def5678901234567890abcdef\n')
   }),
@@ -14,6 +35,23 @@ vi.mock('child_process', () => ({
 vi.mock('fs', () => ({
   readFileSync: vi.fn(() => JSON.stringify({ version: '2.3.1' })),
 }))
+
+function setGitState(state: Partial<GitMockState>) {
+  Object.assign(gitState, state)
+}
+
+beforeEach(() => {
+  setGitState({ detached: false, exactTag: undefined, branch: 'feature/my-branch' })
+  delete process.env.GITHUB_REF_TYPE
+  delete process.env.GITHUB_REF_NAME
+  delete process.env.CI_COMMIT_TAG
+})
+
+afterEach(() => {
+  delete process.env.GITHUB_REF_TYPE
+  delete process.env.GITHUB_REF_NAME
+  delete process.env.CI_COMMIT_TAG
+})
 
 function makeConfig(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
   return {
@@ -47,11 +85,62 @@ describe('plain mode', () => {
     expect(result).toContain('name="build:commit"')
     expect(result).toContain('name="build:branch"')
     expect(result).toContain('name="build:mode"')
+    expect(result).not.toContain('name="build:tag"')
   })
 
   it('injects git branch correctly', async () => {
     const result = await runPlugin(baseHtml)
     expect(result).toContain('content="feature/my-branch"')
+  })
+
+  it('omits build:tag on branch checkout even when tip is tagged', async () => {
+    setGitState({ detached: false, exactTag: 'v1.2.3' })
+    const result = await runPlugin(baseHtml)
+    expect(result).not.toContain('name="build:tag"')
+  })
+
+  it('injects build:tag when detached at an exact tag', async () => {
+    setGitState({ detached: true, exactTag: 'v1.2.3', branch: 'HEAD' })
+    const result = await runPlugin(baseHtml)
+    expect(result).toContain('name="build:tag"')
+    expect(result).toContain('content="v1.2.3"')
+    expect(result).toContain('content="HEAD"')
+  })
+
+  it('omits build:tag when detached but not at a tag', async () => {
+    setGitState({ detached: true, exactTag: undefined, branch: 'HEAD' })
+    const result = await runPlugin(baseHtml)
+    expect(result).not.toContain('name="build:tag"')
+  })
+
+  it('can disable gitTag', async () => {
+    setGitState({ detached: true, exactTag: 'v9.9.9', branch: 'HEAD' })
+    const result = await runPlugin(baseHtml, { gitTag: false })
+    expect(result).not.toContain('build:tag')
+  })
+
+  it('falls back to GITHUB_REF_NAME when detached without local tag', async () => {
+    setGitState({ detached: true, exactTag: undefined, branch: 'HEAD' })
+    process.env.GITHUB_REF_TYPE = 'tag'
+    process.env.GITHUB_REF_NAME = 'v2.0.0'
+    const result = await runPlugin(baseHtml)
+    expect(result).toContain('name="build:tag"')
+    expect(result).toContain('content="v2.0.0"')
+  })
+
+  it('falls back to CI_COMMIT_TAG when detached without local tag', async () => {
+    setGitState({ detached: true, exactTag: undefined, branch: 'HEAD' })
+    process.env.CI_COMMIT_TAG = 'v3.1.0'
+    const result = await runPlugin(baseHtml)
+    expect(result).toContain('content="v3.1.0"')
+  })
+
+  it('prefers local exact tag over CI env', async () => {
+    setGitState({ detached: true, exactTag: 'v-local', branch: 'HEAD' })
+    process.env.CI_COMMIT_TAG = 'v-ci'
+    const result = await runPlugin(baseHtml)
+    expect(result).toContain('content="v-local"')
+    expect(result).not.toContain('content="v-ci"')
   })
 
   it('injects version from package.json', async () => {
@@ -115,6 +204,7 @@ describe('plain mode', () => {
       version: false,
       gitCommit: false,
       gitBranch: false,
+      gitTag: false,
       mode: false,
     })
     expect(result).toContain('build stamp (vite-plugin-build-stamp)')
@@ -263,6 +353,25 @@ describe('encrypt mode', () => {
     expect(info['build:commit']).toBe('abc1234')
     expect(info['build:mode']).toBe('production')
     expect(info['build:time']).toBeTruthy()
+    expect(info['build:tag']).toBeUndefined()
+  })
+
+  it('includes tag in encrypted payload when detached at tag', async () => {
+    setGitState({ detached: true, exactTag: 'v4.5.6', branch: 'HEAD' })
+    const result = await runPlugin(baseHtml, { encrypt: { key: 'tag-key' } })
+    const match = result.match(/name="build:encrypted" content="([^"]+)"/)
+    expect(match).toBeTruthy()
+
+    const info = decryptPayload(match![1], 'tag-key')
+    expect(info['build:tag']).toBe('v4.5.6')
+    expect(info['build:branch']).toBe('HEAD')
+  })
+
+  it('bakes Git Tag label into decrypt helper i18n', async () => {
+    const result = await runPlugin(baseHtml, { encrypt: { key: 'secret123' } })
+    expect(result).toContain('Git标签')
+    const en = await runPlugin(baseHtml, { locale: 'en', encrypt: { key: 'secret123' } })
+    expect(en).toContain('Git Tag')
   })
 
   it('fails decrypt with wrong key', async () => {

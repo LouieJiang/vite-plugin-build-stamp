@@ -17,6 +17,8 @@
 <meta name="build:commit"  content="abc1234">
 <meta name="build:branch"  content="main">
 <meta name="build:mode"    content="production">
+<!-- 仅在按 tag checkout（游离 HEAD 且精确匹配 tag）时额外出现： -->
+<!-- <meta name="build:tag" content="v1.2.3"> -->
 <!-- /build stamp -->
 ```
 
@@ -42,6 +44,7 @@ __buildInfo('your-secret-key')
   📦 版本号: 1.2.3
   🕒 构建时间: 2024/06/04 08:30:00
   🌿 Git分支: main
+  🏷️ Git标签: v1.2.3   ← 仅 tag checkout 时出现
   🔗 提交ID: abc1234
   🌍 运行环境: PRODUCTION
 └───────────── 前端构建信息 ─────────────┘
@@ -110,6 +113,7 @@ export default defineConfig({
 | `version` | `boolean` | `true` | 注入 `package.json` 中的 `version` |
 | `gitCommit` | `boolean \| { short?: boolean }` | `true` | 注入 git commit hash，默认取短 hash（7位） |
 | `gitBranch` | `boolean` | `true` | 注入 git 分支名 |
+| `gitTag` | `boolean` | `true` | 仅在游离 HEAD 且精确匹配 tag（或 CI tag 构建）时注入 `build:tag`；分支构建不写 |
 | `mode` | `boolean` | `true` | 注入 Vite 构建环境（`production` / `staging` 等） |
 | `custom` | `Record<string, string>` | `{}` | 注入自定义字段 |
 | `prefix` | `string` | `"build"` | meta name 前缀，最终为 `{prefix}:{key}` |
@@ -161,6 +165,7 @@ function getBuildInfo() {
     version: get('build:version'),
     commit:  get('build:commit'),
     branch:  get('build:branch'),
+    tag:     get('build:tag'), // 仅 tag checkout 时有值
     mode:    get('build:mode'),
   }
 }

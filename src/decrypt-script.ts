@@ -7,6 +7,7 @@ const STYLE = {
   version: 'color: #52c41a; font-weight: bold; background: #f6ffed; padding: 2px 4px; border-radius: 3px;',
   time: 'color: #722ed1; font-weight: bold; background: #f9f0ff; padding: 2px 4px; border-radius: 3px;',
   branch: 'color: #13c2c2; font-weight: bold; background: #e6fffb; padding: 2px 4px; border-radius: 3px;',
+  tag: 'color: #faad14; font-weight: bold; background: #fffbe6; padding: 2px 4px; border-radius: 3px;',
   commit: 'color: #eb2f96; font-weight: bold; background: #fff0f6; padding: 2px 4px; border-radius: 3px;',
   envProd: 'color: #f5222d; font-weight: bold; background: #fff2f0; padding: 2px 4px; border-radius: 3px;',
   envDev: 'color: #fa8c16; font-weight: bold; background: #fff7e6; padding: 2px 4px; border-radius: 3px;',
@@ -141,6 +142,9 @@ export function buildDecryptIife(
     var gitBranch = _getValue(info, 'branch');
     if (gitBranch != null) _logField('🌿', _i18n.gitBranch, gitBranch, _style.branch);
 
+    var gitTag = _getValue(info, 'tag');
+    if (gitTag != null) _logField('🏷️', _i18n.gitTag, gitTag, _style.tag);
+
     var gitCommit = _getValue(info, 'commit');
     if (gitCommit != null) _logField('🔗', _i18n.commitId, gitCommit, _style.commit);
 
@@ -150,7 +154,7 @@ export function buildDecryptIife(
       _logField('🌍', _i18n.environment, String(env).toUpperCase(), envStyle);
     }
 
-    var known = { version: 1, time: 1, branch: 1, commit: 1, mode: 1 };
+    var known = { version: 1, time: 1, branch: 1, tag: 1, commit: 1, mode: 1 };
     Object.entries(info).forEach(function(e) {
       if (known[_suffix(e[0])]) return;
       _logField('📌', _suffix(e[0]), e[1], _style.custom);

@@ -7,6 +7,7 @@ export interface ConsoleI18n {
   version: string
   buildTime: string
   gitBranch: string
+  gitTag: string
   commitId: string
   environment: string
   metaNotFound: string
@@ -25,6 +26,7 @@ const MESSAGES: Record<BuildStampLocale, ConsoleI18n> = {
     version: '版本号',
     buildTime: '构建时间',
     gitBranch: 'Git分支',
+    gitTag: 'Git标签',
     commitId: '提交ID',
     environment: '运行环境',
     metaNotFound: '[build-stamp] 未找到加密 meta 标签',
@@ -42,6 +44,7 @@ const MESSAGES: Record<BuildStampLocale, ConsoleI18n> = {
     version: 'Version',
     buildTime: 'Build Time',
     gitBranch: 'Git Branch',
+    gitTag: 'Git Tag',
     commitId: 'Commit ID',
     environment: 'Environment',
     metaNotFound: '[build-stamp] encrypted meta tag not found',
